@@ -1,62 +1,53 @@
 import streamlit as st
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
-st.title("🧠 Binary Classification Tool (Flexible Input)")
+# App title
+st.title("Binary Classification Tool (Flexible Input)")
 
-st.sidebar.header("📁 Upload CSV")
+# Sidebar: CSV upload
+st.sidebar.header("Upload CSV")
 uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type=["csv"])
 
 if uploaded_file is not None:
-    try:
-        df = pd.read_csv(uploaded_file)
-        st.write("📊 Uploaded Data Preview:")
-        st.write(df.head())
+    # Read the uploaded CSV into a DataFrame
+    df = pd.read_csv(uploaded_file)
 
-        # Ask for target column
-        target_column = st.sidebar.selectbox("Select the target column", df.columns)
+    # Show a preview of the data
+    st.subheader("Uploaded Data Preview:")
+    st.dataframe(df.head())
 
-        if target_column not in df.columns:
-            st.error(f"❌ The selected target column '{target_column}' is not found in the dataset.")
-        else:
-            # Separate target and features
-            y = df[target_column]
-            X = df.drop(columns=[target_column])
+    # Sidebar: select the target column for classification
+    target_col = st.sidebar.selectbox("Select the target column", df.columns)
 
-            # Keep only numeric columns
-            X_numeric = X.select_dtypes(include=['number'])
+    # Run button
+    run = st.sidebar.button("Run")
 
-            # Impute missing values
-            imputer = SimpleImputer(strategy="mean")
-            X_filled = imputer.fit_transform(X_numeric)
+    if run:
+        # Prepare feature matrix X and target vector y
+        X = df.drop(columns=[target_col])
+        X = X.select_dtypes(include=["number"])
+        X = X.fillna(0)
+        y = df[target_col]
 
-            # Scale features
-            scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X_filled)
+        # This spinner message will be shown temporarily during execution
+        with st.spinner("⏳ Running..."):
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.2, random_state=42
+            )
 
-            # Train/test split
-            X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
-
-            # Train logistic regression on this data
-            model = LogisticRegression(max_iter=1000)
+            model = RandomForestClassifier(random_state=42)
             model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
 
-            # Predict and show accuracy
-            preds = model.predict(X_test)
-            acc = accuracy_score(y_test, preds)
-            st.success(f"✅ Model trained! Test Accuracy: {acc:.2f}")
+        # Spinner ends here automatically
 
-            # Predict on entire dataset
-            full_preds = model.predict(X_scaled)
-            df['Prediction'] = full_preds
-            st.write("📈 Full Dataset with Predictions:")
-            st.write(df)
+        accuracy = accuracy_score(y_test, y_pred)
+        st.success(f"✅ Model trained! Test Accuracy: {accuracy:.2f}")
 
-    except Exception as e:
-        st.error(f"⚠️ Error reading file: {e}")
-else:
-    st.info("👈 Upload a CSV file with a target column to start.")
+        df_with_preds = df.copy()
+        df_with_preds["Prediction"] = model.predict(X)
+        st.subheader("📈 Full Dataset with Predictions:")
+        st.dataframe(df_with_preds)
